@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>圖片解析度放大工具</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; color: #333; }
+h1 { margin-bottom: 24px; text-align: center; }
+.upload-area { border: 2px dashed #aaa; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; transition: border-color 0.2s; }
+.upload-area:hover, .upload-area.dragover { border-color: #4a90d9; background: #f0f7ff; }
+.upload-area input { display: none; }
+.options { margin: 20px 0; display: flex; gap: 20px; align-items: center; justify-content: center; }
+.options label { cursor: pointer; }
+button { background: #4a90d9; color: #fff; border: none; padding: 12px 32px; border-radius: 6px; font-size: 16px; cursor: pointer; }
+button:disabled { background: #aaa; cursor: not-allowed; }
+button:hover:not(:disabled) { background: #357abd; }
+.status { margin-top: 20px; text-align: center; min-height: 24px; }
+.error { color: #d32f2f; }
+.success { color: #2e7d32; }
+#download-btn { display: none; margin: 20px auto; background: #2e7d32; }
+#download-btn:hover { background: #1b5e20; }
+#file-name { margin-top: 10px; font-size: 14px; color: #666; }
+</style>
+</head>
+<body>
+<h1>🖼️ 圖片解析度放大工具</h1>
+
+<div class="upload-area" id="drop-area">
+  <p>拖放圖片到此處，或點擊選擇檔案</p>
+  <p style="font-size:12px;color:#888;margin-top:8px;">支援 JPG, PNG, BMP, WebP, GIF（最大 10MB）</p>
+  <input type="file" id="file-input" accept=".jpg,.jpeg,.png,.bmp,.webp,.gif">
+</div>
+<div id="file-name"></div>
+
+<div class="options">
+  <span>放大倍率：</span>
+  <label><input type="radio" name="scale" value="1"> x1（畫質增強）</label>
+  <label><input type="radio" name="scale" value="2"> x2</label>
+  <label><input type="radio" name="scale" value="4" checked> x4</label>
+</div>
+
+<div style="text-align:center;">
+  <button id="upload-btn" disabled>上傳並處理</button>
+</div>
+
+<div class="status" id="status"></div>
+<div style="text-align:center;">
+  <button id="download-btn">下載結果</button>
+</div>
+
+<script>
+const dropArea = document.getElementById('drop-area');
+const fileInput = document.getElementById('file-input');
+const uploadBtn = document.getElementById('upload-btn');
+const downloadBtn = document.getElementById('download-btn');
+const statusEl = document.getElementById('status');
+const fileNameEl = document.getElementById('file-name');
+let selectedFile = null;
+
+dropArea.addEventListener('click', () => fileInput.click());
+dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('dragover'); });
+dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
+dropArea.addEventListener('drop', e => {
+  e.preventDefault();
+  dropArea.classList.remove('dragover');
+  if (e.dataTransfer.files.length) selectFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files.length) selectFile(fileInput.files[0]); });
+
+function selectFile(file) {
+  selectedFile = file;
+  fileNameEl.textContent = `已選擇：${file.name} (${(file.size/1024/1024).toFixed(2)} MB)`;
+  uploadBtn.disabled = false;
+  downloadBtn.style.display = 'none';
+  statusEl.textContent = '';
+  statusEl.className = 'status';
+}
+
+uploadBtn.addEventListener('click', async () => {
+  if (!selectedFile) return;
+  const scale = document.querySelector('input[name="scale"]:checked').value;
+  const formData = new FormData();
+  formData.append('file', selectedFile);
+  formData.append('scale', scale);
+
+  uploadBtn.disabled = true;
+  statusEl.textContent = '上傳中...';
+  statusEl.className = 'status';
+  downloadBtn.style.display = 'none';
+
+  try {
+    const res = await fetch('/api/upload', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '上傳失敗');
+    statusEl.textContent = '處理中，請稍候...';
+    pollTask(data.task_id);
+  } catch (e) {
+    statusEl.textContent = e.message;
+    statusEl.className = 'status error';
+    uploadBtn.disabled = false;
+  }
+});
+
+function pollTask(taskId) {
+  const interval = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`);
+      const data = await res.json();
+      if (data.status === 'completed') {
+        clearInterval(interval);
+        statusEl.textContent = '處理完成！';
+        statusEl.className = 'status success';
+        downloadBtn.style.display = 'inline-block';
+        downloadBtn.onclick = () => { window.location.href = `/api/download/${taskId}`; };
+        uploadBtn.disabled = false;
+      } else if (data.status === 'failed') {
+        clearInterval(interval);
+        statusEl.textContent = `處理失敗：${data.error || '未知錯誤'}`;
+        statusEl.className = 'status error';
+        uploadBtn.disabled = false;
+      } else {
+        if (data.progress) {
+          statusEl.textContent = `處理中：第 ${data.progress.current_frame}/${data.progress.total_frames} 幀`;
+        } else {
+          statusEl.textContent = '處理中，請稍候...';
+        }
+      }
+    } catch {
+      clearInterval(interval);
+      statusEl.textContent = '無法取得任務狀態';
+      statusEl.className = 'status error';
+      uploadBtn.disabled = false;
+    }
+  }, 2000);
+}
+</script>
+</body>
+</html>
