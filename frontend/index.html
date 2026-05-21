@@ -5,57 +5,266 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>圖片解析度放大工具</title>
 <style>
+:root {
+  --fg: #111;
+  --fg-muted: #555;
+  --fg-faint: #999;
+  --bg: #fff;
+  --bg-subtle: #f7f7f7;
+  --border: #ddd;
+  --border-active: #111;
+  --radius: 6px;
+  --space: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #eee;
+    --fg-muted: #aaa;
+    --fg-faint: #666;
+    --bg: #111;
+    --bg-subtle: #1a1a1a;
+    --border: #333;
+    --border-active: #eee;
+  }
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: system-ui, sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; color: #333; }
-h1 { margin-bottom: 24px; text-align: center; }
-.upload-area { border: 2px dashed #aaa; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; transition: border-color 0.2s; }
-.upload-area:hover, .upload-area.dragover { border-color: #4a90d9; background: #f0f7ff; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+  margin: 0;
+  padding: calc(var(--space) * 8) calc(var(--space) * 3);
+  color: var(--fg);
+  background-color: #f5f5f5;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+.card {
+  max-width: 520px;
+  margin: 0 auto;
+  background: #fff;
+  border-radius: 10px;
+  padding: calc(var(--space) * 5) calc(var(--space) * 4);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+}
+
+h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+  text-align: center;
+  margin-bottom: calc(var(--space) * 5);
+}
+
+.upload-area {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: calc(var(--space) * 6) calc(var(--space) * 3);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.upload-area:hover,
+.upload-area.dragover {
+  border-color: var(--border-active);
+  background: var(--bg-subtle);
+}
+
 .upload-area input { display: none; }
-.options { margin: 20px 0; display: flex; gap: 20px; align-items: center; justify-content: center; }
-.options label { cursor: pointer; }
-button { background: #4a90d9; color: #fff; border: none; padding: 12px 32px; border-radius: 6px; font-size: 16px; cursor: pointer; }
-button:disabled { background: #aaa; cursor: not-allowed; }
-button:hover:not(:disabled) { background: #357abd; }
-.status { margin-top: 20px; text-align: center; min-height: 24px; }
-.error { color: #d32f2f; }
-.success { color: #2e7d32; }
-.progress-bar { width: 100%; height: 20px; background: #e0e0e0; border-radius: 10px; margin-top: 10px; overflow: hidden; display: none; }
-.progress-bar-fill { height: 100%; background: #4a90d9; border-radius: 10px; transition: width 0.3s; width: 0%; }
-#download-btn { display: none; margin: 20px auto; background: #2e7d32; }
-#download-btn:hover { background: #1b5e20; }
-#file-name { margin-top: 10px; font-size: 14px; color: #666; }
+
+.upload-icon {
+  display: block;
+  margin: 0 auto calc(var(--space) * 2);
+  width: 40px;
+  height: 40px;
+  stroke: var(--fg-muted);
+}
+
+.upload-area p {
+  font-size: 0.875rem;
+  color: var(--fg-muted);
+}
+
+.upload-area .hint {
+  font-size: 0.75rem;
+  color: var(--fg-faint);
+  margin-top: var(--space);
+}
+
+#file-name {
+  margin-top: calc(var(--space) * 1.5);
+  font-size: 0.8125rem;
+  color: var(--fg-muted);
+  text-align: center;
+  min-height: 1.2em;
+}
+
+#dimensions {
+  margin-top: calc(var(--space) * 1.5);
+  font-size: 0.75rem;
+  color: var(--fg-faint);
+  text-align: center;
+}
+
+.options {
+  margin: calc(var(--space) * 3) 0 calc(var(--space) * 5);
+  text-align: center;
+}
+
+.options-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--fg-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: calc(var(--space) * 1.5);
+}
+
+.scale-group {
+  display: inline-flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.scale-group label {
+  display: block;
+  padding: calc(var(--space) * 1) calc(var(--space) * 1.75);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  border-right: 1px solid var(--border);
+  transition: background 0.15s, color 0.15s;
+  user-select: none;
+}
+
+.scale-group label:last-child { border-right: none; }
+.scale-group label:hover { background: var(--bg-subtle); }
+
+.scale-group input { display: none; }
+.scale-group input:checked + span {
+  font-weight: 600;
+}
+.scale-group label:has(input:checked) {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.actions {
+  text-align: center;
+  margin-top: calc(var(--space) * 6);
+}
+
+button {
+  font-family: inherit;
+  background: var(--fg);
+  color: var(--bg);
+  border: none;
+  padding: calc(var(--space) * 1.25) calc(var(--space) * 4);
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+button:hover:not(:disabled) {
+  opacity: 0.75;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+
+.status {
+  margin-top: calc(var(--space) * 3);
+  text-align: center;
+  min-height: 1.5em;
+  font-size: 0.8125rem;
+  color: var(--fg-muted);
+}
+
+.progress-bar {
+  width: 100%;
+  height: 3px;
+  background: var(--bg-subtle);
+  border-radius: 2px;
+  margin-top: calc(var(--space) * 1.5);
+  overflow: hidden;
+  display: none;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--fg);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+#download-btn {
+  display: none;
+  margin-top: calc(var(--space) * 3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+  }
+}
 </style>
 </head>
 <body>
-<h1>🖼️ 圖片解析度放大工具</h1>
+<div class="card">
+<h1>圖片解析度放大工具</h1>
 
 <div class="upload-area" id="drop-area">
+  <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <polyline points="17 8 12 3 7 8"/>
+    <line x1="12" y1="3" x2="12" y2="15"/>
+  </svg>
   <p>拖放圖片到此處，或點擊選擇檔案</p>
-  <p style="font-size:12px;color:#888;margin-top:8px;">支援 JPG, PNG, BMP, WebP, GIF（最大 10MB）</p>
+  <p class="hint">支援 JPG, PNG, BMP, WebP, GIF（最大 10MB）</p>
   <input type="file" id="file-input" accept=".jpg,.jpeg,.png,.bmp,.webp,.gif">
 </div>
 <div id="file-name"></div>
 
 <div class="options">
-  <span>放大倍率：</span>
-  <label><input type="radio" name="scale" value="1"> x1</label>
-  <label><input type="radio" name="scale" value="2"> x2</label>
-  <label><input type="radio" name="scale" value="3"> x3</label>
-  <label><input type="radio" name="scale" value="4" checked> x4</label>
-  <label><input type="radio" name="scale" value="5"> x5</label>
-  <label><input type="radio" name="scale" value="6"> x6</label>
-  <label><input type="radio" name="scale" value="7"> x7</label>
-  <label><input type="radio" name="scale" value="8"> x8</label>
+  <span class="options-label">放大倍率</span>
+  <div class="scale-group">
+    <label><input type="radio" name="scale" value="1"><span>×1</span></label>
+    <label><input type="radio" name="scale" value="2" checked><span>×2</span></label>
+    <label><input type="radio" name="scale" value="3"><span>×3</span></label>
+    <label><input type="radio" name="scale" value="4"><span>×4</span></label>
+    <label><input type="radio" name="scale" value="5"><span>×5</span></label>
+    <label><input type="radio" name="scale" value="6"><span>×6</span></label>
+    <label><input type="radio" name="scale" value="7"><span>×7</span></label>
+    <label><input type="radio" name="scale" value="8"><span>×8</span></label>
+  </div>
+  <div id="dimensions"></div>
 </div>
 
-<div style="text-align:center;">
+<div class="actions">
   <button id="upload-btn" disabled>上傳並處理</button>
 </div>
 
 <div class="status" id="status"></div>
 <div class="progress-bar" id="progress-bar"><div class="progress-bar-fill" id="progress-fill"></div></div>
-<div style="text-align:center;">
+<div class="actions">
   <button id="download-btn">下載結果</button>
+</div>
 </div>
 
 <script>
@@ -86,8 +295,30 @@ function selectFile(file) {
   downloadBtn.style.display = 'none';
   progressBar.style.display = 'none';
   statusEl.textContent = '';
-  statusEl.className = 'status';
+
+  const img = new Image();
+  img.onload = () => {
+    imgWidth = img.naturalWidth;
+    imgHeight = img.naturalHeight;
+    updateDimensions();
+    URL.revokeObjectURL(img.src);
+  };
+  img.src = URL.createObjectURL(file);
+  document.getElementById('dimensions').textContent = '';
 }
+
+let imgWidth = 0, imgHeight = 0;
+
+function updateDimensions() {
+  const dim = document.getElementById('dimensions');
+  if (!imgWidth) { dim.textContent = ''; return; }
+  const scale = document.querySelector('input[name="scale"]:checked').value;
+  const size = selectedFile.size / 1024 / 1024;
+  const estSize = size * scale * scale;
+  dim.innerHTML = `${imgWidth} × ${imgHeight}  →  ${imgWidth * scale} × ${imgHeight * scale} px<br>${size.toFixed(2)} MB  →  預估 ${estSize.toFixed(1)} MB`;
+}
+
+document.querySelectorAll('input[name="scale"]').forEach(r => r.addEventListener('change', updateDimensions));
 
 uploadBtn.addEventListener('click', async () => {
   if (!selectedFile) return;
@@ -98,7 +329,6 @@ uploadBtn.addEventListener('click', async () => {
 
   uploadBtn.disabled = true;
   statusEl.textContent = '上傳中...';
-  statusEl.className = 'status';
   downloadBtn.style.display = 'none';
   progressBar.style.display = 'block';
   progressFill.style.width = '0%';
@@ -111,8 +341,8 @@ uploadBtn.addEventListener('click', async () => {
     pollTask(data.task_id);
   } catch (e) {
     statusEl.textContent = e.message;
-    statusEl.className = 'status error';
     uploadBtn.disabled = false;
+    progressBar.style.display = 'none';
   }
 });
 
@@ -128,7 +358,6 @@ function pollTask(taskId) {
         clearInterval(interval);
         progressFill.style.width = '100%';
         statusEl.textContent = '處理完成！';
-        statusEl.className = 'status success';
         downloadBtn.style.display = 'inline-block';
         downloadBtn.onclick = () => { window.location.href = `/api/download/${taskId}`; };
         uploadBtn.disabled = false;
@@ -136,7 +365,6 @@ function pollTask(taskId) {
         clearInterval(interval);
         progressBar.style.display = 'none';
         statusEl.textContent = `處理失敗：${data.error || '未知錯誤'}`;
-        statusEl.className = 'status error';
         uploadBtn.disabled = false;
       } else {
         if (data.progress && data.progress.total > 0) {
@@ -159,7 +387,6 @@ function pollTask(taskId) {
       clearInterval(interval);
       progressBar.style.display = 'none';
       statusEl.textContent = '無法取得任務狀態';
-      statusEl.className = 'status error';
       uploadBtn.disabled = false;
     }
   }, 1000);
