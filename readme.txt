@@ -1,5 +1,5 @@
 在終端機執行：
-cd F:\CodingTest\pic-hd
+cd F:\CodingTest\pic-enhance
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 
 
