@@ -49,16 +49,23 @@ class ESRGANModel:
         else:
             self.model.load_state_dict(loadnet, strict=True)
 
-    def predict(self, lr_image: Image.Image, batch_size=4, patches_size=192, padding=24, pad_size=15) -> Image.Image:
+    def predict(self, lr_image: Image.Image, batch_size=4, patches_size=192, padding=24, pad_size=15, progress_callback=None) -> Image.Image:
         scale = self.scale
         lr_image_np = np.array(lr_image)
         lr_image_np = pad_reflect(lr_image_np, pad_size)
         patches, p_shape = split_image_into_overlapping_patches(lr_image_np, patch_size=patches_size, padding_size=padding)
         img = torch.FloatTensor(patches / 255).permute((0, 3, 1, 2)).to(device).detach()
+        total_batches = (img.shape[0] + batch_size - 1) // batch_size
         with torch.no_grad():
             res = self.model(img[0:batch_size])
+            if progress_callback:
+                progress_callback(1, total_batches)
+            batch_idx = 2
             for i in range(batch_size, img.shape[0], batch_size):
                 res = torch.cat((res, self.model(img[i:i + batch_size])), 0)
+                if progress_callback:
+                    progress_callback(batch_idx, total_batches)
+                batch_idx += 1
         sr_image = res.permute((0, 2, 3, 1)).clamp_(0, 1).cpu().numpy()
         padded_size_scaled = tuple(np.multiply(p_shape[0:2], scale)) + (3,)
         scaled_image_shape = tuple(np.multiply(lr_image_np.shape[0:2], scale)) + (3,)
@@ -74,21 +81,43 @@ def _get_model(scale: int) -> ESRGANModel:
     return _models[scale]
 
 
-def upscale(input_path: str, output_path: str, scale: int) -> None:
-    model = _get_model(2 if scale == 1 else scale)
-    image = Image.open(input_path).convert("RGB")
-    sr_image = model.predict(image)
+def _upscale_image(image: Image.Image, scale: int, progress_callback=None) -> Image.Image:
+    """Upscale a single image to the target scale using available x2/x4 models."""
+    orig_size = image.size
     if scale == 1:
-        sr_image = sr_image.resize(image.size, Image.LANCZOS)
-    sr_image.save(output_path)
+        sr = _get_model(2).predict(image, progress_callback=progress_callback)
+        return sr.resize(orig_size, Image.LANCZOS)
+    if scale == 2:
+        return _get_model(2).predict(image, progress_callback=progress_callback)
+    if scale == 4:
+        return _get_model(4).predict(image, progress_callback=progress_callback)
+    # For 3: upscale x4 then resize down
+    if scale == 3:
+        sr = _get_model(4).predict(image, progress_callback=progress_callback)
+        target = (orig_size[0] * 3, orig_size[1] * 3)
+        return sr.resize(target, Image.LANCZOS)
+    # For 5-8: upscale x4 then x2 (=x8 total) then resize to target
+    def pass1_cb(current, total):
+        if progress_callback:
+            progress_callback(current, total * 2)
+    sr = _get_model(4).predict(image, progress_callback=pass1_cb)
+    def pass2_cb(current, total):
+        if progress_callback:
+            progress_callback(total + current, total * 2)
+    sr = _get_model(2).predict(sr, progress_callback=pass2_cb)
+    target = (orig_size[0] * scale, orig_size[1] * scale)
+    return sr.resize(target, Image.LANCZOS)
+
+
+def upscale(input_path: str, output_path: str, scale: int, progress_callback=None) -> None:
+    image = Image.open(input_path).convert("RGB")
+    _upscale_image(image, scale, progress_callback=progress_callback).save(output_path)
 
 
 def upscale_gif(input_path: str, output_path: str, scale: int, progress_callback=None) -> None:
-    model = _get_model(2 if scale == 1 else scale)
     gif = Image.open(input_path)
     loop = gif.info.get("loop", 0)
 
-    # Must copy each frame immediately - Pillow reuses the same object
     frames_input = []
     durations = []
     for frame in ImageSequence.Iterator(gif):
@@ -103,12 +132,9 @@ def upscale_gif(input_path: str, output_path: str, scale: int, progress_callback
         rgb = rgba.convert("RGB")
         alpha = rgba.split()[3]
 
-        sr_rgb = model.predict(rgb)
-        target_size = sr_rgb.size if scale != 1 else rgb.size
+        sr_rgb = _upscale_image(rgb, scale)
+        target_size = sr_rgb.size
         sr_alpha = alpha.resize(target_size, Image.BICUBIC)
-
-        if scale == 1:
-            sr_rgb = sr_rgb.resize(rgb.size, Image.LANCZOS)
 
         sr_rgba = sr_rgb.copy()
         sr_rgba.putalpha(sr_alpha)
@@ -117,7 +143,6 @@ def upscale_gif(input_path: str, output_path: str, scale: int, progress_callback
         if progress_callback:
             progress_callback(i + 1, total)
 
-    # Save as animated GIF
     result_frames[0].save(
         output_path,
         save_all=True,

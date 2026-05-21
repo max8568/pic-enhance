@@ -24,8 +24,8 @@ MIME_MAP = {
 
 @app.post("/api/upload")
 async def upload(file: UploadFile = File(...), scale: int = Form(4)):
-    if scale not in (1, 2, 4):
-        raise HTTPException(400, "scale must be 1, 2 or 4")
+    if scale not in range(1, 9):
+        raise HTTPException(400, "scale must be between 1 and 8")
 
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:

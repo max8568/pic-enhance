@@ -14,12 +14,13 @@ OUTPUTS_DIR = Path(__file__).resolve().parent.parent / "outputs"
 def run_upscale(task_id: str, input_path: str, output_path: str, scale: int) -> None:
     tasks[task_id]["status"] = "processing"
     try:
+        def on_progress(current, total):
+            tasks[task_id]["progress"] = {"current": current, "total": total}
+
         if input_path.lower().endswith(".gif"):
-            def on_progress(current, total):
-                tasks[task_id]["progress"] = {"current_frame": current, "total_frames": total}
             upscale_gif(input_path, output_path, scale, progress_callback=on_progress)
         else:
-            upscale(input_path, output_path, scale)
+            upscale(input_path, output_path, scale, progress_callback=on_progress)
         tasks[task_id]["status"] = "completed"
         tasks[task_id]["output_path"] = output_path
     except Exception as e:

@@ -19,6 +19,8 @@ button:hover:not(:disabled) { background: #357abd; }
 .status { margin-top: 20px; text-align: center; min-height: 24px; }
 .error { color: #d32f2f; }
 .success { color: #2e7d32; }
+.progress-bar { width: 100%; height: 20px; background: #e0e0e0; border-radius: 10px; margin-top: 10px; overflow: hidden; display: none; }
+.progress-bar-fill { height: 100%; background: #4a90d9; border-radius: 10px; transition: width 0.3s; width: 0%; }
 #download-btn { display: none; margin: 20px auto; background: #2e7d32; }
 #download-btn:hover { background: #1b5e20; }
 #file-name { margin-top: 10px; font-size: 14px; color: #666; }
@@ -36,9 +38,14 @@ button:hover:not(:disabled) { background: #357abd; }
 
 <div class="options">
   <span>放大倍率：</span>
-  <label><input type="radio" name="scale" value="1"> x1（畫質增強）</label>
+  <label><input type="radio" name="scale" value="1"> x1</label>
   <label><input type="radio" name="scale" value="2"> x2</label>
+  <label><input type="radio" name="scale" value="3"> x3</label>
   <label><input type="radio" name="scale" value="4" checked> x4</label>
+  <label><input type="radio" name="scale" value="5"> x5</label>
+  <label><input type="radio" name="scale" value="6"> x6</label>
+  <label><input type="radio" name="scale" value="7"> x7</label>
+  <label><input type="radio" name="scale" value="8"> x8</label>
 </div>
 
 <div style="text-align:center;">
@@ -46,6 +53,7 @@ button:hover:not(:disabled) { background: #357abd; }
 </div>
 
 <div class="status" id="status"></div>
+<div class="progress-bar" id="progress-bar"><div class="progress-bar-fill" id="progress-fill"></div></div>
 <div style="text-align:center;">
   <button id="download-btn">下載結果</button>
 </div>
@@ -57,6 +65,8 @@ const uploadBtn = document.getElementById('upload-btn');
 const downloadBtn = document.getElementById('download-btn');
 const statusEl = document.getElementById('status');
 const fileNameEl = document.getElementById('file-name');
+const progressBar = document.getElementById('progress-bar');
+const progressFill = document.getElementById('progress-fill');
 let selectedFile = null;
 
 dropArea.addEventListener('click', () => fileInput.click());
@@ -74,6 +84,7 @@ function selectFile(file) {
   fileNameEl.textContent = `已選擇：${file.name} (${(file.size/1024/1024).toFixed(2)} MB)`;
   uploadBtn.disabled = false;
   downloadBtn.style.display = 'none';
+  progressBar.style.display = 'none';
   statusEl.textContent = '';
   statusEl.className = 'status';
 }
@@ -89,6 +100,8 @@ uploadBtn.addEventListener('click', async () => {
   statusEl.textContent = '上傳中...';
   statusEl.className = 'status';
   downloadBtn.style.display = 'none';
+  progressBar.style.display = 'block';
+  progressFill.style.width = '0%';
 
   try {
     const res = await fetch('/api/upload', { method: 'POST', body: formData });
@@ -104,12 +117,16 @@ uploadBtn.addEventListener('click', async () => {
 });
 
 function pollTask(taskId) {
+  const startTime = Date.now();
+  let lastPct = 0;
+  let eta = 0;
   const interval = setInterval(async () => {
     try {
       const res = await fetch(`/api/tasks/${taskId}`);
       const data = await res.json();
       if (data.status === 'completed') {
         clearInterval(interval);
+        progressFill.style.width = '100%';
         statusEl.textContent = '處理完成！';
         statusEl.className = 'status success';
         downloadBtn.style.display = 'inline-block';
@@ -117,23 +134,35 @@ function pollTask(taskId) {
         uploadBtn.disabled = false;
       } else if (data.status === 'failed') {
         clearInterval(interval);
+        progressBar.style.display = 'none';
         statusEl.textContent = `處理失敗：${data.error || '未知錯誤'}`;
         statusEl.className = 'status error';
         uploadBtn.disabled = false;
       } else {
-        if (data.progress) {
-          statusEl.textContent = `處理中：第 ${data.progress.current_frame}/${data.progress.total_frames} 幀`;
+        if (data.progress && data.progress.total > 0) {
+          const pct = Math.round((data.progress.current / data.progress.total) * 100);
+          progressFill.style.width = pct + '%';
+          if (pct > lastPct) {
+            const elapsed = (Date.now() - startTime) / 1000;
+            eta = pct > 0 ? Math.round(elapsed / pct * (100 - pct)) : 0;
+            lastPct = pct;
+          } else {
+            eta = Math.max(0, eta - 1);
+          }
+          statusEl.textContent = `處理中... ${pct}%` + (eta > 0 ? `（預估剩餘 ${eta} 秒）` : '');
         } else {
+          progressFill.style.width = '10%';
           statusEl.textContent = '處理中，請稍候...';
         }
       }
     } catch {
       clearInterval(interval);
+      progressBar.style.display = 'none';
       statusEl.textContent = '無法取得任務狀態';
       statusEl.className = 'status error';
       uploadBtn.disabled = false;
     }
-  }, 2000);
+  }, 1000);
 }
 </script>
 </body>
