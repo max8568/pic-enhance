@@ -218,6 +218,11 @@ button:focus-visible {
   margin-top: calc(var(--space) * 3);
 }
 
+#download-pdf-btn {
+  display: none;
+  margin-top: calc(var(--space) * 3);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     transition-duration: 0.01ms !important;
@@ -262,8 +267,9 @@ button:focus-visible {
 
 <div class="status" id="status"></div>
 <div class="progress-bar" id="progress-bar"><div class="progress-bar-fill" id="progress-fill"></div></div>
-<div class="actions">
+<div class="actions" style="display:flex;justify-content:center;gap:12px">
   <button id="download-btn">下載結果</button>
+  <button id="download-pdf-btn">下載 PDF</button>
 </div>
 </div>
 
@@ -272,6 +278,7 @@ const dropArea = document.getElementById('drop-area');
 const fileInput = document.getElementById('file-input');
 const uploadBtn = document.getElementById('upload-btn');
 const downloadBtn = document.getElementById('download-btn');
+const downloadPdfBtn = document.getElementById('download-pdf-btn');
 const statusEl = document.getElementById('status');
 const fileNameEl = document.getElementById('file-name');
 const progressBar = document.getElementById('progress-bar');
@@ -293,6 +300,7 @@ function selectFile(file) {
   fileNameEl.textContent = `已選擇：${file.name} (${(file.size/1024/1024).toFixed(2)} MB)`;
   uploadBtn.disabled = false;
   downloadBtn.style.display = 'none';
+  downloadPdfBtn.style.display = 'none';
   progressBar.style.display = 'none';
   statusEl.textContent = '';
 
@@ -330,6 +338,7 @@ uploadBtn.addEventListener('click', async () => {
   uploadBtn.disabled = true;
   statusEl.textContent = '上傳中...';
   downloadBtn.style.display = 'none';
+  downloadPdfBtn.style.display = 'none';
   progressBar.style.display = 'block';
   progressFill.style.width = '0%';
 
@@ -360,6 +369,8 @@ function pollTask(taskId) {
         statusEl.textContent = '處理完成！';
         downloadBtn.style.display = 'inline-block';
         downloadBtn.onclick = () => { window.location.href = `/api/download/${taskId}`; };
+        downloadPdfBtn.style.display = 'inline-block';
+        downloadPdfBtn.onclick = () => { window.location.href = `/api/download/${taskId}/pdf`; };
         uploadBtn.disabled = false;
       } else if (data.status === 'failed') {
         clearInterval(interval);

@@ -1,9 +1,11 @@
+import io
 import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
+from PIL import Image as PILImage
 
 from backend.tasks import OUTPUTS_DIR, UPLOADS_DIR, cleanup_old_outputs, create_task, tasks
 
@@ -56,6 +58,31 @@ async def get_task(task_id: str):
     return resp
 
 
+@app.get("/api/download/{task_id}/pdf")
+async def download_pdf(task_id: str):
+    task = tasks.get(task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    if task["status"] != "completed":
+        raise HTTPException(400, "Task not completed yet")
+
+    output_path = task["output_path"]
+    if not Path(output_path).exists():
+        raise HTTPException(404, "Output file not found")
+
+    image = PILImage.open(output_path).convert("RGB")
+    w, h = image.size
+    buffer = io.BytesIO()
+    image.save(buffer, format="PDF")
+    buffer.seek(0)
+
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{w}x{h}.pdf"'},
+    )
+
+
 @app.get("/api/download/{task_id}")
 async def download(task_id: str):
     task = tasks.get(task_id)
@@ -69,8 +96,11 @@ async def download(task_id: str):
         raise HTTPException(404, "Output file not found")
 
     ext = Path(output_path).suffix.lower()
+    image = PILImage.open(output_path)
+    w, h = image.size
+    image.close()
     media_type = MIME_MAP.get(ext, "application/octet-stream")
-    return FileResponse(output_path, media_type=media_type, filename=task["filename"])
+    return FileResponse(output_path, media_type=media_type, filename=f"{w}x{h}{ext}")
 
 
 @app.on_event("startup")
